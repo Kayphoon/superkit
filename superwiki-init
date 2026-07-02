@@ -1,16 +1,19 @@
 #!/bin/bash
 # 初始化项目的 superwiki 知识库
-# 用法: superwiki-init [--all|--codex|--opencode|--claude] [项目路径]
+# 用法: superwiki-init [--all|--codex|--opencode|--claude] [--hook] [项目路径]
 
 set -e
 
 usage() {
-    echo "用法: superwiki-init [--all|--codex|--opencode|--claude] [项目路径]"
+    echo "用法: superwiki-init [--all|--codex|--opencode|--claude] [--hook] [项目路径]"
     echo ""
     echo "默认初始化全部支持的项目级 skill 入口:"
     echo "  .agents/skills   -> ../.wiki/skills  (Codex / agent-compatible)"
     echo "  .opencode/skills -> ../.wiki/skills  (OpenCode)"
     echo "  .claude/skills   -> ../.wiki/skills  (Claude Code)"
+    echo ""
+    echo "可选:"
+    echo "  --hook            安装 Codex UserPromptSubmit memory hook 到项目 .codex/"
 }
 
 PROJECT_DIR=""
@@ -18,6 +21,7 @@ INIT_CODEX=0
 INIT_OPENCODE=0
 INIT_CLAUDE=0
 INIT_ALL=0
+INIT_HOOK=0
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -32,6 +36,9 @@ while [ "$#" -gt 0 ]; do
             ;;
         --claude|--claude-code)
             INIT_CLAUDE=1
+            ;;
+        --hook)
+            INIT_HOOK=1
             ;;
         -h|--help)
             usage
@@ -108,6 +115,37 @@ create_skill_link() {
     fi
 }
 
+install_project_memory_hook() {
+    HOOK_SOURCE="$(cd "$(dirname "$0")" && pwd -P)/hooks/superwiki-memory-hook.py"
+    HOOK_TEMPLATE="$(cd "$(dirname "$0")" && pwd -P)/hooks/hooks.json"
+
+    if [ ! -f "$HOOK_SOURCE" ] || [ ! -f "$HOOK_TEMPLATE" ]; then
+        echo "⚠️  superwiki memory hook 文件不存在，跳过"
+        return
+    fi
+
+    mkdir -p .codex/hooks
+
+    if [ -L .codex/hooks/superwiki-memory-hook.py ]; then
+        ln -sf "$HOOK_SOURCE" .codex/hooks/superwiki-memory-hook.py
+        echo "✅ 更新 .codex/hooks/superwiki-memory-hook.py"
+    elif [ -e .codex/hooks/superwiki-memory-hook.py ]; then
+        echo "⚠️  .codex/hooks/superwiki-memory-hook.py 已存在且不是符号链接，跳过"
+    else
+        ln -s "$HOOK_SOURCE" .codex/hooks/superwiki-memory-hook.py
+        echo "✅ 创建 .codex/hooks/superwiki-memory-hook.py"
+    fi
+
+    if [ -e .codex/hooks.json ]; then
+        echo "⚠️  .codex/hooks.json 已存在，未自动覆盖"
+        echo "    请手动合并: $HOOK_TEMPLATE"
+    else
+        cp "$HOOK_TEMPLATE" .codex/hooks.json
+        echo "✅ 创建 .codex/hooks.json"
+        echo "    新增 hook 后需要在 Codex 中通过 /hooks 审核并信任"
+    fi
+}
+
 # 2. 各 agent 的项目级 skill 入口
 if [ "$INIT_CODEX" -eq 1 ]; then
     create_skill_link "Codex / agent-compatible" ".agents/skills"
@@ -119,6 +157,10 @@ fi
 
 if [ "$INIT_CLAUDE" -eq 1 ]; then
     create_skill_link "Claude Code" ".claude/skills"
+fi
+
+if [ "$INIT_HOOK" -eq 1 ]; then
+    install_project_memory_hook
 fi
 
 echo "完成！开始使用:"

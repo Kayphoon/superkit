@@ -66,6 +66,34 @@ install_agent() {
 
 install_agent "Codex" "${CODEX_HOME:-$HOME/.codex}/agents"
 
+install_memory_hook() {
+    CODEX_DIR="${CODEX_HOME:-$HOME/.codex}"
+    HOOKS_DIR="$CODEX_DIR/hooks"
+    HOOK_FILE="hooks/superwiki-memory-hook.py"
+
+    if [ ! -f "$SCRIPT_DIR/$HOOK_FILE" ]; then
+        return
+    fi
+
+    mkdir -p "$HOOKS_DIR"
+    echo "安装 SuperWiki memory hook 脚本到 $HOOKS_DIR..."
+
+    if [ -L "$HOOKS_DIR/superwiki-memory-hook.py" ]; then
+        ln -sf "$SCRIPT_DIR/$HOOK_FILE" "$HOOKS_DIR/superwiki-memory-hook.py"
+        echo "  更新符号链接: $HOOKS_DIR/superwiki-memory-hook.py"
+    elif [ -e "$HOOKS_DIR/superwiki-memory-hook.py" ]; then
+        echo "  路径已存在且不是符号链接，跳过: $HOOKS_DIR/superwiki-memory-hook.py"
+    else
+        ln -s "$SCRIPT_DIR/$HOOK_FILE" "$HOOKS_DIR/superwiki-memory-hook.py"
+        echo "  创建符号链接: $HOOKS_DIR/superwiki-memory-hook.py"
+    fi
+
+    echo "  项目级启用: superwiki-init --hook /path/to/project"
+    echo "  全局启用: 手动合并 hooks/hooks.global.json 到 $CODEX_DIR/hooks.json"
+}
+
+install_memory_hook
+
 # 如果指定了项目路径，初始化该项目
 if [ -n "$1" ]; then
     echo ""

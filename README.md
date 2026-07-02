@@ -25,6 +25,12 @@ ln -s ../.wiki/skills .claude/skills
 superwiki-init /path/to/project
 ```
 
+如果要同时启用 Codex 自动 memory hook：
+
+```bash
+superwiki-init --hook /path/to/project
+```
+
 如果 agent 已经能加载全局 `superwiki` skill，但所在项目没有接入项目级 skill 目录，应先初始化这个项目的 `.wiki/skills` 和对应运行时入口。Codex/agent-compatible 使用 `.agents/skills -> ../.wiki/skills`，OpenCode 使用 `.opencode/skills -> ../.wiki/skills`，Claude Code 使用 `.claude/skills -> ../.wiki/skills`。已有冲突路径时不要覆盖，先让用户确认。
 
 ## 配置
@@ -71,6 +77,37 @@ task(category="deep", load_skills=["superwiki"], prompt="...")
 ```
 Act as memory-librarian. Task: <任务>. Project root: <path>.
 Return a memory packet under 1200 words. Do not solve the task.
+```
+
+## 自动 memory hook
+
+`hooks/superwiki-memory-hook.py` 是一个 Codex `UserPromptSubmit` command hook。它在用户提交消息后、主线程正式回答前运行，读取当前项目的 `.wiki/skills/wiki-*/SKILL.md`，结合用户 prompt 和最近 transcript 做轻量匹配，然后通过 `additionalContext` 注入一个小型 `<superwiki-memory-packet>`。
+
+这个 hook 不会直接启动 `memory-librarian` 子代理。Codex 当前 hook 只稳定支持 `type: "command"`；在 hook 里嵌套启动 Codex/agent 容易递归、变慢、增加不确定性。因此自动 hook 只负责快速召回，复杂任务仍由主线程按需派 `memory-librarian` 深检索。
+
+项目级安装方式：
+
+```bash
+superwiki-init --hook /path/to/project
+```
+
+这会创建：
+
+```text
+.codex/hooks/superwiki-memory-hook.py -> <superwiki>/hooks/superwiki-memory-hook.py
+.codex/hooks.json
+```
+
+新增或变更 hook 后，需要在 Codex 里用 `/hooks` 审核并信任。已有 `.codex/hooks.json` 时，初始化脚本不会覆盖，会提示你手动合并 `hooks/hooks.json`。
+
+如果希望对所有已接入 `.wiki/skills` 的项目全局启用，先运行 `skills.sh` 安装全局 hook 脚本，再把 `hooks/hooks.global.json` 合并到 `~/.codex/hooks.json`。hook 在没有 `.wiki/skills` 的项目中会安静退出。
+
+常用环境变量：
+
+```bash
+SUPERWIKI_HOOK_DISABLE=1          # 临时关闭注入
+SUPERWIKI_HOOK_MAX_ENTRIES=4      # 最多注入几个 wiki
+SUPERWIKI_HOOK_MAX_CHARS=6000     # memory packet 字符上限
 ```
 
 ## 知识结构

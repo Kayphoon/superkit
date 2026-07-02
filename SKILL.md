@@ -49,6 +49,8 @@ description: |
 
 ### 1.0 知识检索模式选择
 
+如果项目已经启用了 SuperWiki UserPromptSubmit hook，主线程在收到用户消息时会先拿到一个轻量 memory packet。这个 packet 来自本地确定性检索（`.wiki/skills/` 和最近 transcript），不是子代理深度研究。收到 packet 后先按其中的路径和摘要判断是否足够；如果 packet 明确提示不足，或任务风险较高，再切换到下方的 `memory-librarian` 子代理模式。
+
 当 `.wiki/skills/` 下的知识模块较少（< 15 个）时，直接内联读取相关 wiki 即可——跳到下方「读取」步骤。
 
 当知识库规模较大（≥ 15 个模块，或单个任务横跨多个领域）时，切换为子代理检索模式，避免主线程被全量知识淹没：
