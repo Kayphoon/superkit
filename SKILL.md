@@ -47,6 +47,32 @@ description: |
 
 ### 1. 任务过程中（并行，不打断任务）
 
+### 1.0 知识检索模式选择
+
+当 `.wiki/skills/` 下的知识模块较少（< 15 个）时，直接内联读取相关 wiki 即可——跳到下方「读取」步骤。
+
+当知识库规模较大（≥ 15 个模块，或单个任务横跨多个领域）时，切换为子代理检索模式，避免主线程被全量知识淹没：
+
+1. 把任务目标、项目根路径、关键词交给 `memory-librarian` 子代理
+2. 子代理只读 `.wiki/skills/`、`~/.codex/memories/` 和项目文档，不做任何写入
+3. 子代理返回压缩后的 memory packet（< 1200 字），包含相关 wiki 摘要、置信度、引用路径、stale 标记
+4. 主线程基于 packet 执行任务，不再直接读 wiki 源文件
+
+子代理检索模式的取舍：
+- 主线程上下文干净，只拿到高密度摘要而非全量知识噪音
+- 检索逻辑可以很重（遍历、匹配、验证代码一致性），不污染主线程
+- 代价是多一次模型调用，适合复杂任务；简单单文件编辑仍用内联模式
+
+主线程调用示例：
+
+```
+Act as memory-librarian. Task: <任务描述>. Project root: <path>.
+Find relevant wiki entries and memories, return a memory packet under 1200 words
+with paths and confidence. Do not solve the task.
+```
+
+---
+
 读取 `.wiki/skills/` 目录，根据任务内容读取相关的 `wiki-*/SKILL.md`。如果项目里已有历史遗留的 `wiki_*/SKILL.md`，也要纳入候选。
 
 读取时如果发现 wiki 内容和当前代码不一致，**当场修复**，然后继续任务，不等任务结束。

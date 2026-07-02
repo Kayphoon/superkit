@@ -55,6 +55,24 @@ skill(name="superwiki")
 task(category="deep", load_skills=["superwiki"], prompt="...")
 ```
 
+## memory-librarian 子代理
+
+当项目知识库规模变大时，主线程内联读 wiki 会污染上下文。superwiki 附带一个 `memory-librarian` 自定义代理（`agents/memory-librarian.toml`），做只读检索后返回压缩摘要。
+
+它的工作方式：
+
+- 主线程把任务目标交给 memory-librarian
+- memory-librarian 遍历 `.wiki/skills/` 和 `~/.codex/memories/`，匹配相关条目
+- 只返回一个 < 1200 字的 memory packet（摘要 + 置信度 + 引用路径 + stale 标记）
+- 主线程基于 packet 执行任务，不直接读 wiki 源文件
+
+安装脚本 `skills.sh` 会自动把 `memory-librarian.toml` 链接到 `~/.codex/agents/`。使用时在主线程里写：
+
+```
+Act as memory-librarian. Task: <任务>. Project root: <path>.
+Return a memory packet under 1200 words. Do not solve the task.
+```
+
 ## 知识结构
 
 ```

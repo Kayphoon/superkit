@@ -30,11 +30,41 @@ install_global_link() {
     fi
 }
 
-# 安装 skill 到常见全局 skill 根目录
 install_global_link "OpenCode" "$HOME/.config/opencode/skills"
 install_global_link "Claude Code" "$HOME/.claude/skills"
 install_global_link "agent-compatible" "$HOME/.agents/skills"
 install_global_link "Codex" "${CODEX_HOME:-$HOME/.codex}/skills"
+
+# 安装 memory-librarian 自定义代理到 Codex agents 目录
+install_agent() {
+    LABEL="$1"
+    AGENTS_DIR="$2"
+    AGENT_FILE="agents/memory-librarian.toml"
+
+    if [ ! -f "$SCRIPT_DIR/$AGENT_FILE" ]; then
+        return
+    fi
+
+    mkdir -p "$AGENTS_DIR"
+    echo "安装 memory-librarian 代理到 $AGENTS_DIR... ($LABEL)"
+
+    if [ -L "$AGENTS_DIR/memory-librarian.toml" ]; then
+        LINK_TARGET="$(readlink "$AGENTS_DIR/memory-librarian.toml")"
+        if [ "$LINK_TARGET" = "$SCRIPT_DIR/$AGENT_FILE" ]; then
+            echo "  符号链接已存在: $AGENTS_DIR/memory-librarian.toml"
+        else
+            ln -sf "$SCRIPT_DIR/$AGENT_FILE" "$AGENTS_DIR/memory-librarian.toml"
+            echo "  更新符号链接: $AGENTS_DIR/memory-librarian.toml"
+        fi
+    elif [ -e "$AGENTS_DIR/memory-librarian.toml" ]; then
+        echo "  路径已存在且不是符号链接，跳过: $AGENTS_DIR/memory-librarian.toml"
+    else
+        ln -s "$SCRIPT_DIR/$AGENT_FILE" "$AGENTS_DIR/memory-librarian.toml"
+        echo "  创建符号链接: $AGENTS_DIR/memory-librarian.toml"
+    fi
+}
+
+install_agent "Codex" "${CODEX_HOME:-$HOME/.codex}/agents"
 
 # 如果指定了项目路径，初始化该项目
 if [ -n "$1" ]; then
