@@ -1,6 +1,6 @@
 # agent-skills
 
-跨运行时的通用 skills 仓库，包含 `superwiki`、`explorer`、`librarian`。每个 skill 都是遵循 [Agent Skills 规范](https://agentskills.io) 的自包含目录（`SKILL.md` + 支持文件）。
+跨运行时的通用 skills 仓库，包含 `superspec`、`superwiki`、`explorer`、`librarian`。每个 skill 都是遵循 [Agent Skills 规范](https://agentskills.io) 的自包含目录（`SKILL.md` + 支持文件）。
 
 ## Codex 原生 agents 已迁移
 
@@ -18,6 +18,7 @@ curl -fsSL https://raw.githubusercontent.com/Kayphoon/codex-flash-agents/main/in
 
 | skill | 用途 |
 |---|---|
+| `superspec` | 自上而下业务解构与单文件 HTML 规格师：推导端到端单向生命周期与阻断/降级边界，输出人类优先、AI 无歧义的三栏现代技术规格书。 |
 | `superwiki` | 项目知识库管理器：维护 `.wiki/skills/` 下的 `wiki-*` 知识模块，以当前代码为真相来源。附带 `superwiki-init` 与 `skills.sh` 两个脚本。 |
 | `explorer` | 本地代码库只读探查：把「在不熟悉的仓库里找代码」委派给原生子代理，返回带路径的结论。 |
 | `librarian` | 外部资料只读研究员：查外部库、OSS、厂商 API 的官方文档与源码，回到钉到 commit 与代码行的证据。 |
