@@ -1,0 +1,5 @@
+interface:
+  display_name: "SuperWiki"
+  short_description: "接入、升级、审计项目知识库"
+policy:
+  allow_implicit_invocation: false

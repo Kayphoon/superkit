@@ -1,6 +1,6 @@
 #!/bin/bash
 # SuperWiki 安装脚本
-# 用法: ./skills.sh [项目路径]
+# 用法: ./skills.sh
 #
 # 只把本仓库这一个 skill 链接到全局 agent 兼容 skill 目录：
 #   superwiki -> 本仓库根目录
@@ -41,16 +41,8 @@ install_global_link() {
 
 install_global_link "agent-compatible" "$HOME/.agents/skills"
 
-# 如果指定了项目路径，初始化该项目
-if [ -n "$1" ]; then
-    echo ""
-    echo "初始化项目: $1"
-    "$SCRIPT_DIR/superwiki-init" "$1"
-fi
-
 echo ""
 echo "安装完成！全局 skill 链接: $HOME/.agents/skills/$SKILL_NAME"
 echo ""
-echo "使用方式:"
-echo "  1. 在项目中初始化: $SCRIPT_DIR/superwiki-init /path/to/project"
-echo "  2. 使用当前运行时的原生 skill 机制加载: $SKILL_NAME"
+echo "使用方式: 在 agent 里手动调用 superwiki 接入项目，或运行"
+echo "  $SCRIPT_DIR/superwiki-init --team|--personal /path/to/project"

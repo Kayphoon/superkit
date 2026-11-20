@@ -19,7 +19,7 @@ curl -fsSL https://raw.githubusercontent.com/Kayphoon/codex-flash-agents/main/in
 | skill | 用途 |
 |---|---|
 | `superspec` | 自上而下业务解构与单文件 HTML 规格师：推导端到端单向生命周期与阻断/降级边界，输出人类优先、AI 无歧义的三栏现代技术规格书。 |
-| `superwiki` | 项目知识库管理器：维护 `.wiki/skills/` 下的 `wiki-*` 知识模块，以当前代码为真相来源。附带 `superwiki-init` 与 `skills.sh` 两个脚本。 |
+| `superwiki` | 项目知识库：手动调用接入项目（团队模式提交进 Git，个人模式只在本机），项目里生成自动触发的 `superwiki-auto` 负责日常检索与维护 `wiki-*`。附带 `superwiki-init` 与 `skills.sh`。 |
 | `explorer` | 本地代码库只读探查：把「在不熟悉的仓库里找代码」委派给原生子代理，返回带路径的结论。 |
 | `librarian` | 外部资料只读研究员：查外部库、OSS、厂商 API 的官方文档与源码，回到钉到 commit 与代码行的证据。 |
 
@@ -89,13 +89,14 @@ npx @kayphoon/agent-skills remove explorer
 
 ## 使用 superwiki
 
-装好之后，先用初始化脚本给项目建立知识库入口（只挑你要用的运行时）：
+全局的 `superwiki` 只能手动调用。在项目里调用一次，它会问你选哪种模式，然后生成项目级的 `superwiki-auto`：
 
 ```bash
-superwiki-init --codex /path/to/project
+superwiki-init --team /path/to/project       # 知识写在 .agents/skills/，提交进 Git 与团队共享
+superwiki-init --personal /path/to/project   # 知识写在 .wiki/skills/，只在本机
 ```
 
-它会创建 `.wiki/skills/`，并把 `.agents/skills` 指向它（`--opencode`、`--claude`、`--cursor` 同理）。之后知识模块就写在 `.wiki/skills/wiki-*/SKILL.md`，由运行时的原生 skill 发现按 `name` + `description` 路由。
+之后 `superwiki-auto` 会被自动触发，负责查和存 `wiki-*` 知识模块。重复运行同一命令即升级，项目专属约定 `superwiki-auto/references/local.md` 和全部 `wiki-*` 不受影响。
 
 ## 许可证
 
