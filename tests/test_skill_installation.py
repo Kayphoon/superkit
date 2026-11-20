@@ -1,7 +1,7 @@
 """End-to-end behavior tests for the skill-only installation path.
 
-These tests exercise the real ``superwiki-init`` and ``skills.sh`` scripts in
-isolated temporary directories.  They assert filesystem behavior (symlinks,
+These tests exercise the real ``superwiki-init`` (team and personal modes) and
+``skills.sh`` scripts in isolated temporary directories.  They assert filesystem behavior (symlinks,
 preserved content, rejected options) rather than script text.
 """
 
@@ -36,12 +36,13 @@ OTHER_GLOBAL_SKILL_DIRS = (
 
 
 def make_dist(root: Path) -> Path:
-    """Create an installable copy of the real SuperWiki skill (no agents)."""
+    """Create an installable copy of the real SuperWiki skill."""
     dist = root / "dist"
     dist.mkdir(parents=True)
-    for name in ("superwiki-init", "skills.sh", "SKILL.md"):
+    for name in ("superwiki-init", "skills.sh", "SKILL.md", "VERSION"):
         shutil.copy2(REPO_ROOT / name, dist / name)
-    shutil.copytree(REPO_ROOT / "references", dist / "references")
+    for name in ("references", "templates", "agents"):
+        shutil.copytree(REPO_ROOT / name, dist / name)
     return dist
 
 
@@ -91,178 +92,374 @@ class InstallerTestCase(unittest.TestCase):
         )
 
 
+ENTRY = "superwiki-auto"
+TEMPLATE_VERSION = (REPO_ROOT / "VERSION").read_text(encoding="utf-8").strip()
+
+
+def git_init(path: Path) -> None:
+    subprocess.run(["git", "init", "-q", str(path)], check=True)
+
+
+def git_status(path: Path) -> str:
+    return subprocess.run(
+        ["git", "-C", str(path), "status", "--porcelain", "--untracked-files=all"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+
+
+def frontmatter(skill_file: Path) -> dict:
+    try:
+        import yaml
+    except ImportError:  # pragma: no cover - depends on the host
+        raise unittest.SkipTest("PyYAML is not installed")
+    text = skill_file.read_text(encoding="utf-8")
+    assert text.startswith("---\n"), f"{skill_file} has no frontmatter"
+    return yaml.safe_load(text.split("---\n", 2)[1])
+
+
 class ProjectInitializerTests(InstallerTestCase):
-    def test_selected_runtime_links_shared_knowledge_store(self):
+    def init(self, *args, cwd: Path, home: Path):
+        return self.run_script(INIT_SCRIPT, *args, cwd=cwd, home=home)
+
+    def new_project(self, name: str = "project", git: bool = True):
         root = self.sandbox()
-        project = root / "project"
+        project = root / name
         project.mkdir()
+        if git:
+            git_init(project)
+        return root, project
 
-        proc = self.run_script(
-            INIT_SCRIPT, "--claude", project, cwd=root, home=root / "home"
-        )
-
-        self.assertEqual(proc.returncode, 0, proc.stderr)
-        store = project / ".wiki" / "skills"
-        self.assertTrue(store.is_dir())
-        self.assert_link_to(project / ".claude" / "skills", store)
-
-        # The link exposes the same content as the single knowledge store.
-        (store / "SKILL.md").write_text("# stored knowledge\n", encoding="utf-8")
-        self.assertEqual(
-            (project / ".claude" / "skills" / "SKILL.md").read_text(encoding="utf-8"),
-            "# stored knowledge\n",
-        )
-
-        # No other runtime entry points are created for a selected runtime.
-        for runtime_dir, _ in RUNTIME_LINKS:
-            if runtime_dir == ".claude":
-                continue
-            self.assertFalse(
-                (project / runtime_dir).exists(),
-                f"{runtime_dir} should not exist after --claude",
-            )
-        self.assertFalse((project / ".codex").exists())
-
-    def test_default_and_all_initialize_every_runtime(self):
-        for flags in ((), ("--all",)):
+    def test_mode_is_required_before_any_write(self):
+        for flags in ((), ("--team", "--personal"), ("--personal", "--team")):
             with self.subTest(flags=flags):
-                root = self.sandbox()
-                project = root / "project"
-                project.mkdir()
+                root, project = self.new_project(git=False)
+                proc = self.init(*flags, project, cwd=root, home=root / "home")
+                self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
+                self.assertEqual(list(project.iterdir()), [])
 
-                proc = self.run_script(
-                    INIT_SCRIPT, *flags, project, cwd=root, home=root / "home"
-                )
+    def test_team_mode_keeps_knowledge_in_agents_skills(self):
+        root, project = self.new_project()
 
-                self.assertEqual(proc.returncode, 0, proc.stderr)
-                store = project / ".wiki" / "skills"
-                self.assertTrue(store.is_dir())
-                for _, link_path in RUNTIME_LINKS:
-                    self.assert_link_to(project / link_path, store)
+        proc = self.init("--team", project, cwd=root, home=root / "home")
 
-    def test_paths_with_spaces_stay_functional(self):
-        root = self.sandbox()
-        project = root / "project with spaces"
-        project.mkdir()
-        workdir = root / "work dir"
-        workdir.mkdir()
-        (root / "home").mkdir()
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        skills = project / ".agents" / "skills"
+        self.assertTrue(skills.is_dir())
+        self.assertFalse(skills.is_symlink())
+        entry = skills / ENTRY
+        for rel in (
+            "SKILL.md",
+            "references/writing.md",
+            "references/review.md",
+            "references/local.md",
+        ):
+            self.assertTrue((entry / rel).is_file(), rel)
+        self.assertFalse(os.path.lexists(project / ".wiki"))
+        self.assertFalse(os.path.lexists(project / ".claude"))
+        self.assertIn(
+            "/.wiki/staging.md",
+            (project / ".gitignore").read_text(encoding="utf-8").splitlines(),
+        )
+        status = git_status(project)
+        self.assertIn(".agents/skills/superwiki-auto/SKILL.md", status)
+        self.assertIn(".gitignore", status)
 
-        proc = self.run_script(INIT_SCRIPT, project, cwd=workdir, home=root / "home")
+    def test_team_mode_optional_runtime_links_point_at_agents_skills(self):
+        root, project = self.new_project()
+
+        proc = self.init(
+            "--team", "--claude", "--cursor", project, cwd=root, home=root / "home"
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        skills = project / ".agents" / "skills"
+        self.assert_link_to(project / ".claude" / "skills", skills)
+        self.assert_link_to(project / ".cursor" / "skills", skills)
+        self.assertFalse(os.path.lexists(project / ".opencode"))
+
+    def test_personal_mode_links_runtimes_and_leaves_git_status_clean(self):
+        root, project = self.new_project()
+
+        proc = self.init("--personal", project, cwd=root, home=root / "home")
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         store = project / ".wiki" / "skills"
+        self.assertTrue((store / ENTRY / "SKILL.md").is_file())
         for _, link_path in RUNTIME_LINKS:
             self.assert_link_to(project / link_path, store)
+        self.assertEqual(git_status(project), "")
+        self.assertFalse(os.path.lexists(project / ".gitignore"))
+        exclude = (project / ".git" / "info" / "exclude").read_text(encoding="utf-8")
+        self.assertIn("/.wiki/", exclude.splitlines())
 
-    def test_repeated_run_preserves_store_and_links(self):
-        root = self.sandbox()
-        project = root / "project"
-        project.mkdir()
+    def test_personal_mode_selected_runtime_only(self):
+        root, project = self.new_project(git=False)
 
-        first = self.run_script(INIT_SCRIPT, project, cwd=root, home=root / "home")
-        self.assertEqual(first.returncode, 0, first.stderr)
+        proc = self.init("--personal", "--claude", project, cwd=root, home=root / "home")
 
+        self.assertEqual(proc.returncode, 0, proc.stderr)
         store = project / ".wiki" / "skills"
-        marker = store / "keep.md"
-        marker.write_text("do not delete\n", encoding="utf-8")
+        self.assert_link_to(project / ".claude" / "skills", store)
+        for runtime_dir, _ in RUNTIME_LINKS:
+            if runtime_dir != ".claude":
+                self.assertFalse(os.path.lexists(project / runtime_dir), runtime_dir)
 
-        second = self.run_script(INIT_SCRIPT, project, cwd=root, home=root / "home")
-        self.assertEqual(second.returncode, 0, second.stderr)
+    def test_rendered_entry_is_a_valid_auto_skill(self):
+        for mode, wiki_dir in (("team", ".agents/skills"), ("personal", ".wiki/skills")):
+            with self.subTest(mode=mode):
+                root, project = self.new_project()
+                proc = self.init(f"--{mode}", project, cwd=root, home=root / "home")
+                self.assertEqual(proc.returncode, 0, proc.stderr)
 
-        self.assertEqual(marker.read_text(encoding="utf-8"), "do not delete\n")
-        for _, link_path in RUNTIME_LINKS:
-            self.assert_link_to(project / link_path, store)
+                entry = project / wiki_dir / ENTRY
+                meta = frontmatter(entry / "SKILL.md")
+                self.assertEqual(meta["name"], ENTRY)
+                self.assertFalse(meta["name"].startswith("wiki-"))
+                self.assertNotIn("disable-model-invocation", meta)
+                self.assertTrue(1 <= len(meta["description"].strip()) <= 1024)
+                self.assertIn(wiki_dir, meta["description"])
+                self.assertEqual(meta["metadata"]["superwiki-mode"], mode)
+                self.assertEqual(
+                    str(meta["metadata"]["superwiki-template"]), TEMPLATE_VERSION
+                )
+                for path in entry.rglob("*"):
+                    if path.is_file():
+                        self.assertNotIn("{{", path.read_text(encoding="utf-8"), path)
 
-    def test_conflicting_file_and_wrong_symlink_not_overwritten(self):
-        root = self.sandbox()
-        project = root / "project"
-        project.mkdir()
+    def test_rerun_upgrades_template_and_preserves_local_rules_and_modules(self):
+        root, project = self.new_project()
+        home = root / "home"
+        self.assertEqual(self.init("--team", project, cwd=root, home=home).returncode, 0)
+        fresh = (project / ".agents" / "skills" / ENTRY / "SKILL.md").read_bytes()
+
+        skills = project / ".agents" / "skills"
+        local = skills / ENTRY / "references" / "local.md"
+        local.write_text("项目专属规则\n", encoding="utf-8")
+        module = skills / "wiki-foo" / "SKILL.md"
+        module.parent.mkdir()
+        module.write_text("---\nname: wiki-foo\n---\n", encoding="utf-8")
+        entry = skills / ENTRY / "SKILL.md"
+        entry.write_text(
+            fresh.decode("utf-8").replace(TEMPLATE_VERSION, "2000.01.01"),
+            encoding="utf-8",
+        )
+
+        proc = self.init("--team", project, cwd=root, home=home)
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("2000.01.01 -> " + TEMPLATE_VERSION, proc.stdout)
+        self.assertEqual(entry.read_bytes(), fresh)
+        self.assertEqual(local.read_text(encoding="utf-8"), "项目专属规则\n")
+        self.assertEqual(module.read_text(encoding="utf-8"), "---\nname: wiki-foo\n---\n")
+        gitignore = (project / ".gitignore").read_text(encoding="utf-8").splitlines()
+        self.assertEqual(gitignore.count("/.wiki/staging.md"), 1)
+
+    def test_mode_switch_is_refused_without_changes(self):
+        for first, second in (("team", "personal"), ("personal", "team")):
+            with self.subTest(first=first, second=second):
+                root, project = self.new_project()
+                home = root / "home"
+                self.assertEqual(
+                    self.init(f"--{first}", project, cwd=root, home=home).returncode, 0
+                )
+                before = tree_snapshot(project)
+
+                proc = self.init(f"--{second}", project, cwd=root, home=home)
+
+                self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+                self.assertEqual(tree_snapshot(project), before)
+
+    def test_team_mode_refuses_symlinked_agents_skills(self):
+        root, project = self.new_project(git=False)
         outside = root / "outside-skills"
         outside.mkdir()
-
-        # A real file where a link would go must be left untouched.
-        (project / ".claude").mkdir()
-        claude_skills = project / ".claude" / "skills"
-        claude_skills.write_text("user owned\n", encoding="utf-8")
-
-        # A symlink pointing somewhere else must not be repointed.
         (project / ".agents").mkdir()
-        agents_skills = project / ".agents" / "skills"
-        agents_skills.symlink_to(outside)
+        (project / ".agents" / "skills").symlink_to(outside)
 
-        proc = self.run_script(INIT_SCRIPT, project, cwd=root, home=root / "home")
+        proc = self.init("--team", project, cwd=root, home=root / "home")
+
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertEqual(list(outside.iterdir()), [])
+        self.assertFalse(os.path.lexists(project / ".wiki"))
+
+    def test_any_conflict_aborts_before_writing_anything(self):
+        root, project = self.new_project(git=False)
+        outside = root / "outside-skills"
+        outside.mkdir()
+        (project / ".claude").mkdir()
+        (project / ".claude" / "skills").write_text("user owned\n", encoding="utf-8")
+        (project / ".agents").mkdir()
+        (project / ".agents" / "skills").symlink_to(outside)
+        before = tree_snapshot(project)
+
+        proc = self.init("--personal", project, cwd=root, home=root / "home")
+
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertIn(".claude/skills", proc.stderr)
+        self.assertIn(".agents/skills", proc.stderr)
+        self.assertEqual(tree_snapshot(project), before)
+        self.assertEqual(list(outside.iterdir()), [])
+
+        # Narrowing to a runtime without a conflict succeeds.
+        proc = self.init("--personal", "--opencode", project, cwd=root, home=root / "home")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assert_link_to(project / ".opencode" / "skills", project / ".wiki" / "skills")
+
+    def test_team_mode_conflicting_runtime_entry_aborts(self):
+        root, project = self.new_project()
+        (project / ".claude" / "skills").mkdir(parents=True)
+        before = tree_snapshot(project)
+
+        proc = self.init("--team", "--claude", project, cwd=root, home=root / "home")
+
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertEqual(tree_snapshot(project), before)
+
+    def test_legacy_layouts_block_the_other_mode(self):
+        cases = (
+            ("team", ".wiki/skills/wiki-old"),
+            ("team", ".agents/skills/superwiki"),
+            ("personal", ".agents/skills/wiki-old"),
+            ("personal", ".agents/skills/superwiki"),
+        )
+        for mode, legacy in cases:
+            with self.subTest(mode=mode, legacy=legacy):
+                root, project = self.new_project()
+                (project / legacy).mkdir(parents=True)
+                (project / legacy / "SKILL.md").write_text("legacy\n", encoding="utf-8")
+                before = tree_snapshot(project)
+
+                proc = self.init(f"--{mode}", project, cwd=root, home=root / "home")
+
+                self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+                self.assertEqual(tree_snapshot(project), before)
+
+    def test_legacy_same_mode_layouts_upgrade_in_place(self):
+        for mode, legacy in (("team", ".agents/skills/wiki-old"), ("personal", ".wiki/skills/wiki-old")):
+            with self.subTest(mode=mode):
+                root, project = self.new_project()
+                (project / legacy).mkdir(parents=True)
+                module = project / legacy / "SKILL.md"
+                module.write_text("legacy\n", encoding="utf-8")
+
+                proc = self.init(f"--{mode}", project, cwd=root, home=root / "home")
+
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+                self.assertEqual(module.read_text(encoding="utf-8"), "legacy\n")
+                self.assertTrue((module.parent.parent / ENTRY / "SKILL.md").is_file())
+
+    def test_upgrade_removes_files_dropped_from_the_template(self):
+        root, project = self.new_project()
+        home = root / "home"
+        self.assertEqual(self.init("--team", project, cwd=root, home=home).returncode, 0)
+        entry = project / ".agents" / "skills" / ENTRY
+        stale = entry / "references" / "retired.md"
+        stale.write_text("old template file\n", encoding="utf-8")
+        (entry / "old-dir").mkdir()
+        (entry / "old-dir" / "x.md").write_text("x\n", encoding="utf-8")
+
+        proc = self.init("--team", project, cwd=root, home=home)
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertFalse(claude_skills.is_symlink())
-        self.assertEqual(
-            claude_skills.read_text(encoding="utf-8"),
-            "user owned\n",
-        )
-        self.assertTrue(agents_skills.is_symlink())
-        self.assertEqual(Path(os.path.realpath(agents_skills)), Path(os.path.realpath(outside)))
+        self.assertFalse(stale.exists())
+        self.assertFalse((entry / "old-dir").exists())
+        self.assertTrue((entry / "references" / "local.md").is_file())
 
-        # Unrelated runtime entries are still installed.
-        store = project / ".wiki" / "skills"
-        self.assert_link_to(project / ".opencode" / "skills", store)
-        self.assert_link_to(project / ".cursor" / "skills", store)
+    def test_projects_in_a_repo_subdirectory_get_ignore_rules(self):
+        for mode in ("team", "personal"):
+            with self.subTest(mode=mode):
+                root = self.sandbox()
+                repo = root / "repo"
+                project = repo / "packages" / "app"
+                project.mkdir(parents=True)
+                git_init(repo)
+
+                proc = self.init(f"--{mode}", project, cwd=root, home=root / "home")
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+                (project / ".wiki").mkdir(exist_ok=True)
+                (project / ".wiki" / "staging.md").write_text("draft\n", encoding="utf-8")
+
+                status = git_status(repo)
+                self.assertNotIn("staging.md", status)
+                if mode == "personal":
+                    self.assertEqual(status, "")
+                else:
+                    self.assertIn("packages/app/.agents/skills/superwiki-auto/SKILL.md", status)
+
+    def test_staging_cleanup_rule_matches_the_mode(self):
+        expected = {"team": "已被提交", "personal": "已写入正式模块"}
+        for mode, wiki_dir in (("team", ".agents/skills"), ("personal", ".wiki/skills")):
+            with self.subTest(mode=mode):
+                root, project = self.new_project()
+                self.assertEqual(
+                    self.init(f"--{mode}", project, cwd=root, home=root / "home").returncode, 0
+                )
+                writing = (project / wiki_dir / ENTRY / "references" / "writing.md").read_text(
+                    encoding="utf-8"
+                )
+                self.assertIn(expected[mode], writing)
+                other = expected["personal" if mode == "team" else "team"]
+                self.assertNotIn(other, writing)
+
+    def test_paths_with_spaces_stay_functional(self):
+        for mode, wiki_dir in (("team", ".agents/skills"), ("personal", ".wiki/skills")):
+            with self.subTest(mode=mode):
+                root, project = self.new_project("project with spaces")
+                workdir = root / "work dir"
+                workdir.mkdir()
+
+                proc = self.init(f"--{mode}", project, cwd=workdir, home=root / "home")
+
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+                self.assertTrue((project / wiki_dir / ENTRY / "SKILL.md").is_file())
+
+    def test_non_git_project_gets_no_ignore_files(self):
+        for mode in ("team", "personal"):
+            with self.subTest(mode=mode):
+                root, project = self.new_project(git=False)
+                proc = self.init(f"--{mode}", project, cwd=root, home=root / "home")
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+                self.assertFalse(os.path.lexists(project / ".gitignore"))
+                self.assertFalse(os.path.lexists(project / ".git"))
 
     def test_stale_hook_option_is_rejected_before_any_write(self):
-        for args in (("--hook",), ("--hook", "project"), ("project", "--hook")):
+        for args in (("--hook",), ("--team", "--hook", "project"), ("project", "--hook")):
             with self.subTest(args=args):
-                root = self.sandbox()
-                project = root / "project"
-                project.mkdir()
+                root, project = self.new_project(git=False)
                 resolved = tuple(project if arg == "project" else arg for arg in args)
 
-                proc = self.run_script(
-                    INIT_SCRIPT, *resolved, cwd=root, home=root / "home"
-                )
+                proc = self.init(*resolved, cwd=root, home=root / "home")
 
                 self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
                 self.assertEqual(list(project.iterdir()), [])
                 self.assertFalse((root / ".wiki").exists())
-                self.assertFalse((project / ".codex").exists())
 
 
 class UninitializedProjectSafetyTests(InstallerTestCase):
-    """Zero-footprint invariant: nothing is written without explicit setup.
-
-    ``superwiki-init`` is the only component allowed to create ``.wiki`` state,
-    and only when invoked with an explicit target.  Rejected options, invalid
-    arguments and aborted runs must leave an uninitialized project byte-for-byte
-    identical: no ``.wiki/``, no ``.wiki/staging.md``, no runtime links.
-    """
+    """Zero-footprint invariant: invalid or aborted runs write nothing."""
 
     def assert_zero_footprint(self, root: Path, project: Path) -> None:
-        self.assertFalse(
-            os.path.lexists(project / ".wiki"), f"{project / '.wiki'} must not exist"
-        )
-        self.assertFalse(
-            os.path.lexists(project / ".wiki" / "staging.md"),
-            "staging.md must never be created by the installer",
-        )
-        for runtime_dir, link_path in RUNTIME_LINKS:
-            self.assertFalse(
-                os.path.lexists(project / link_path),
-                f"{link_path} must not be created",
-            )
-        self.assertFalse(os.path.lexists(project / ".agents"))
-        self.assertFalse(os.path.lexists(project / ".opencode"))
-        self.assertFalse(os.path.lexists(project / ".cursor"))
-        self.assertFalse(os.path.lexists(project / ".codex"))
+        self.assertFalse(os.path.lexists(project / ".wiki"))
+        for runtime_dir, _ in RUNTIME_LINKS:
+            self.assertFalse(os.path.lexists(project / runtime_dir), runtime_dir)
+        self.assertFalse(os.path.lexists(project / ".gitignore"))
         self.assertEqual(list(root.rglob("staging.md")), [])
         self.assertEqual(list(root.rglob(".wiki")), [])
+        self.assertEqual(list(root.rglob(ENTRY)), [])
 
     def test_rejected_options_and_invalid_commands_leave_no_footprint(self):
         cases = (
             ("--hook",),
-            ("--hook", "project"),
+            ("--team", "--hook", "project"),
             ("project", "--hook"),
-            ("--bogus", "project"),
+            ("--team", "--bogus", "project"),
             ("-x", "project"),
             ("--wiki", "project"),
-            ("project", "other"),
+            ("--team", "project", "other"),
+            ("project",),
+            ("--team", "--personal", "project"),
         )
         for args in cases:
             with self.subTest(args=args):
@@ -275,9 +472,7 @@ class UninitializedProjectSafetyTests(InstallerTestCase):
                 targets = {"project": project, "other": other}
                 resolved = tuple(targets.get(arg, arg) for arg in args)
 
-                proc = self.run_script(
-                    INIT_SCRIPT, *resolved, cwd=root, home=home
-                )
+                proc = self.run_script(INIT_SCRIPT, *resolved, cwd=root, home=home)
 
                 self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
                 self.assert_zero_footprint(root, project)
@@ -290,33 +485,24 @@ class UninitializedProjectSafetyTests(InstallerTestCase):
         home = root / "home"
         home.mkdir()
 
-        # A missing project path is never created and never initialized.
         missing = root / "not-a-project"
-        proc = self.run_script(INIT_SCRIPT, missing, cwd=root, home=home)
+        proc = self.run_script(INIT_SCRIPT, "--team", missing, cwd=root, home=home)
         self.assertNotEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertFalse(missing.exists())
         self.assertEqual(sorted(path.name for path in root.iterdir()), ["home"])
-        self.assertEqual(list(home.iterdir()), [])
 
-        # A project path that is a regular file stays untouched.
         file_project = root / "afile"
         file_project.write_bytes(b"keep\n")
-        proc = self.run_script(INIT_SCRIPT, file_project, cwd=root, home=home)
+        proc = self.run_script(INIT_SCRIPT, "--personal", file_project, cwd=root, home=home)
         self.assertNotEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-        self.assertFalse(file_project.is_symlink())
         self.assertEqual(file_project.read_bytes(), b"keep\n")
         self.assertEqual(list(root.rglob(".wiki")), [])
-        self.assertEqual(list(root.rglob("staging.md")), [])
-        self.assertEqual(list(home.iterdir()), [])
 
-        # Help exits successfully but performs no writes, even with a target.
         project = root / "project"
         project.mkdir()
-        for flag in ("-h", "--help"):
-            with self.subTest(flag=flag):
-                proc = self.run_script(
-                    INIT_SCRIPT, flag, project, cwd=root, home=home
-                )
+        for args in (("-h",), ("--help",), ("--team", "-h")):
+            with self.subTest(args=args):
+                proc = self.run_script(INIT_SCRIPT, *args, project, cwd=root, home=home)
                 self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
                 self.assertIn("用法", proc.stdout)
                 self.assert_zero_footprint(root, project)
@@ -329,75 +515,64 @@ class UninitializedProjectSafetyTests(InstallerTestCase):
         (project / "src").mkdir(parents=True)
         (project / "README.md").write_bytes(b"keep me\n")
         (project / "src" / "main.py").write_bytes(b"print('hi')\n")
-        claude_dir = project / ".claude"
-        claude_dir.mkdir()
-        settings = claude_dir / "settings.json"
-        settings.write_bytes(b'{"theme": "dark"}\n')
+        (project / ".claude").mkdir()
+        (project / ".claude" / "settings.json").write_bytes(b'{"theme": "dark"}\n')
         before = tree_snapshot(project)
 
-        for args in (("--hook", project), ("--bogus", project), ("project", "extra")):
+        for args in (
+            ("--hook", project),
+            ("--team", "--bogus", project),
+            ("--team", project, "extra"),
+            (project,),
+        ):
             with self.subTest(args=args):
-                proc = self.run_script(
-                    INIT_SCRIPT, *args, cwd=root, home=root / "home"
-                )
+                proc = self.run_script(INIT_SCRIPT, *args, cwd=root, home=root / "home")
                 self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
                 self.assertEqual(tree_snapshot(project), before)
-                self.assertEqual(
-                    list(project.rglob(".wiki")), [], ".wiki must not appear"
-                )
-                self.assertEqual(list(project.rglob("staging.md")), [])
 
     def test_no_target_run_only_touches_the_resolved_cwd(self):
         root = self.sandbox()
         called_from = root / "cwd-project"
         called_from.mkdir()
-        uninitialized_sibling = root / "sibling-project"
-        uninitialized_sibling.mkdir()
+        sibling = root / "sibling-project"
+        sibling.mkdir()
         home = root / "home"
         home.mkdir()
 
-        proc = self.run_script(INIT_SCRIPT, cwd=called_from, home=home)
+        proc = self.run_script(INIT_SCRIPT, "--personal", cwd=called_from, home=home)
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         store = called_from / ".wiki" / "skills"
-        self.assertTrue(store.is_dir())
+        self.assertTrue((store / ENTRY / "SKILL.md").is_file())
         for _, link_path in RUNTIME_LINKS:
             self.assert_link_to(called_from / link_path, store)
-
-        # The only footprint is under the explicit cwd; unrelated projects,
-        # HOME and the sandbox root stay untouched, and staging is never made.
-        self.assertEqual(list(uninitialized_sibling.iterdir()), [])
-        self.assertFalse(os.path.lexists(uninitialized_sibling / ".wiki"))
+        self.assertEqual(list(sibling.iterdir()), [])
         self.assertEqual(list(home.iterdir()), [])
-        self.assertEqual(
-            [path for path in root.rglob(".wiki") if path != called_from / ".wiki"],
-            [],
-        )
-        self.assertEqual(list(root.rglob("staging.md")), [])
         self.assertFalse(os.path.lexists(root / ".agents"))
-        self.assertFalse(os.path.lexists(root / ".opencode"))
-        self.assertFalse(os.path.lexists(root / ".cursor"))
+        self.assertFalse(os.path.lexists(root / ".wiki"))
 
 
-    def test_docs_forbid_wiki_and_staging_on_uninitialized_projects(self):
-        """The written protocol must match the enforced zero-footprint rule."""
-        for name in (
-            "SKILL.md",
-            os.path.join("references", "writing.md"),
-            os.path.join("references", "initialization.md"),
-        ):
-            with self.subTest(doc=name):
-                text = (REPO_ROOT / name).read_text(encoding="utf-8")
-                self.assertRegex(
-                    text,
-                    r"(严禁|不得|禁止|不要)[^。\n]{0,40}staging",
-                    f"{name} must forbid staging writes on uninitialized projects",
-                )
-                self.assertRegex(
-                    text,
-                    r"(严禁|不得|禁止|不要)[^。\n]{0,40}`\.wiki/` 目录",
-                    f"{name} must forbid creating the .wiki/ directory",
-                )
+class GlobalSkillInvocationTests(unittest.TestCase):
+    def test_global_skill_is_user_invoked_in_every_runtime(self):
+        meta = frontmatter(REPO_ROOT / "SKILL.md")
+        self.assertEqual(meta["name"], "superwiki")
+        self.assertIs(meta["disable-model-invocation"], True)
+        try:
+            import yaml
+        except ImportError:  # pragma: no cover
+            raise unittest.SkipTest("PyYAML is not installed")
+        policy = yaml.safe_load(
+            (REPO_ROOT / "agents" / "openai.yaml").read_text(encoding="utf-8")
+        )["policy"]
+        self.assertIs(policy["allow_implicit_invocation"], False)
+
+    def test_template_is_not_discoverable_as_a_skill(self):
+        self.assertEqual(list((REPO_ROOT / "templates").rglob("SKILL.md")), [])
+
+    def test_template_entry_name_differs_from_global_skill(self):
+        text = (REPO_ROOT / "templates" / ENTRY / "SKILL.md.tmpl").read_text(encoding="utf-8")
+        self.assertIn(f"name: {ENTRY}\n", text)
+        self.assertNotIn("disable-model-invocation", text)
 
 
 class GlobalInstallerTests(InstallerTestCase):
@@ -418,10 +593,12 @@ class GlobalInstallerTests(InstallerTestCase):
             self.assert_link_to(superwiki_link, dist)
             # Installed links expose the real entrypoint and role docs.
             self.assertTrue((superwiki_link / "SKILL.md").is_file())
-            for role in ("wiki-auditor.md", "initializer.md"):
-                self.assertTrue(
-                    (superwiki_link / "references" / "roles" / role).is_file()
-                )
+            self.assertTrue(
+                (superwiki_link / "references" / "roles" / "wiki-auditor.md").is_file()
+            )
+            self.assertTrue(
+                (superwiki_link / "templates" / "superwiki-auto" / "SKILL.md.tmpl").is_file()
+            )
 
             # Fresh install dirs contain exactly this one skill: no siblings.
             self.assertEqual(
@@ -579,7 +756,7 @@ class GlobalInstallerTests(InstallerTestCase):
 
         # A stale distribution may still ship the retired helper definitions.
         legacy_agents = dist / "agents"
-        legacy_agents.mkdir()
+        legacy_agents.mkdir(exist_ok=True)
         legacy_bytes = {
             "memory-librarian.toml": b'name = "retired-memory-librarian"\n',
             "superwiki-initializer.toml": b'name = "retired-superwiki-initializer"\n',
