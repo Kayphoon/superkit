@@ -208,7 +208,7 @@ function list(skills, opts) {
     console.log(`  ${wrap(oneLine(skill.description), 96).join('\n  ')}`);
     console.log('');
   }
-  console.log(`Install with: ${bold('npx github:Kayphoon/agent-skills install <skill>')}`);
+  console.log(`Install with: ${bold('npx github:Kayphoon/superkit install <skill>')}`);
 }
 
 function info(skills, name, opts) {
@@ -271,11 +271,11 @@ function parseArgs(argv) {
 }
 
 function usage(skills) {
-  console.log(`${bold('agent-skills')} ${PKG.version} ${dim(`- ${skills.map((s) => s.name).join(', ')}`)}
+  console.log(`${bold('superkit')} ${PKG.version} ${dim(`- ${skills.map((s) => s.name).join(', ')}`)}
 
 Usage:
-  npx @kayphoon/agent-skills <command> [options]
-  npx github:Kayphoon/agent-skills <command> [options]
+  npx @kayphoon/superkit <command> [options]
+  npx github:Kayphoon/superkit <command> [options]
 
 Commands:
   codex install [options]        Compatibility bridge to codex-flash-agents
@@ -294,10 +294,10 @@ Options:
   -v, --version     Show version
 
 Examples:
-  npx @kayphoon/agent-skills install
-  npx @kayphoon/agent-skills install superwiki --target codex
-  npx @kayphoon/agent-skills install explorer librarian --project ./my-repo
-  npx @kayphoon/agent-skills list --json
+  npx @kayphoon/superkit install
+  npx @kayphoon/superkit install superwiki --target codex
+  npx @kayphoon/superkit install explorer librarian --project ./my-repo
+  npx @kayphoon/superkit list --json
 
 Native Codex agents: https://github.com/Kayphoon/codex-flash-agents`);
 }

@@ -1,10 +1,10 @@
 {
-  "name": "@kayphoon/agent-skills",
+  "name": "@kayphoon/superkit",
   "version": "1.0.0",
-  "description": "Portable agent skills for project knowledge, local code exploration, and external research.",
+  "description": "Kayphoon 的 agent 工具箱：可安装的 skills（superwiki、superspec、explorer、librarian）与安装器。",
   "type": "module",
   "bin": {
-    "agent-skills": "bin/agent-skills.mjs"
+    "superkit": "bin/superkit.mjs"
   },
   "files": [
     "bin",
@@ -17,10 +17,11 @@
     "node": ">=18"
   },
   "scripts": {
-    "list": "node bin/agent-skills.mjs list",
-    "test": "node --test tests/*.test.mjs && node bin/agent-skills.mjs list && node bin/agent-skills.mjs info superwiki"
+    "list": "node bin/superkit.mjs list",
+    "test": "node --test tests/*.test.mjs && node bin/superkit.mjs list && node bin/superkit.mjs info superwiki"
   },
   "keywords": [
+    "superkit",
     "agent-skills",
     "skills",
     "codex",
@@ -31,10 +32,10 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Kayphoon/agent-skills.git"
+    "url": "git+https://github.com/Kayphoon/superkit.git"
   },
-  "homepage": "https://github.com/Kayphoon/agent-skills#readme",
+  "homepage": "https://github.com/Kayphoon/superkit#readme",
   "bugs": {
-    "url": "https://github.com/Kayphoon/agent-skills/issues"
+    "url": "https://github.com/Kayphoon/superkit/issues"
   }
 }

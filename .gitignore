@@ -4,3 +4,12 @@ node_modules/
 __pycache__/
 *.py[cod]
 *.log
+
+# 本机工作目录，不进仓库
+evaluations/
+backups/
+.idea/
+.omo/
+
+# 独立仓库，有自己的 git
+codex-flash-agents/

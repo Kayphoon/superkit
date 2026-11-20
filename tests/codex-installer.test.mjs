@@ -11,7 +11,7 @@ const archive = 'https://codeload.github.com/Kayphoon/codex-flash-agents/tar.gz/
 const prefix = ['--yes', `--package=${archive}`, 'codex-flash-agents'];
 
 function fixture(t) {
-  const root = mkdtempSync(join(tmpdir(), 'agent-skills-bridge-test-'));
+  const root = mkdtempSync(join(tmpdir(), 'superkit-bridge-test-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const bin = join(root, 'fake-bin');
   mkdirSync(bin);
@@ -54,7 +54,7 @@ function fixture(t) {
 
 const entries = [
   ['shell', '/bin/sh', [join(packageRoot, 'install-codex.sh')], []],
-  ['legacy CLI', process.execPath, [join(packageRoot, 'bin/agent-skills.mjs'), 'codex'], ['install']],
+  ['legacy CLI', process.execPath, [join(packageRoot, 'bin/superkit.mjs'), 'codex'], ['install']],
   ['direct compatibility CLI', process.execPath, [join(packageRoot, 'bin/install-codex.mjs')], ['install']],
 ];
 
@@ -79,7 +79,7 @@ for (const [name, command, entry, install] of entries) {
 for (const args of [[], ['--help'], ['-h'], ['help'], ['install', '--help']]) {
   test(`legacy Codex help ${JSON.stringify(args)} is local and points to the new repository`, (t) => {
     const f = fixture(t);
-    const child = f.run(process.execPath, [join(packageRoot, 'bin/agent-skills.mjs'), 'codex', ...args]);
+    const child = f.run(process.execPath, [join(packageRoot, 'bin/superkit.mjs'), 'codex', ...args]);
     assert.equal(child.status, 0, child.stderr);
     assert.match(child.stdout, /https:\/\/github.com\/Kayphoon\/codex-flash-agents/);
     assert.equal(existsSync(f.argvPath), false);
@@ -88,7 +88,7 @@ for (const args of [[], ['--help'], ['-h'], ['help'], ['install', '--help']]) {
 
 test('general skills help remains local and identifies the compatibility bridge', (t) => {
   const f = fixture(t);
-  const child = f.run(process.execPath, [join(packageRoot, 'bin/agent-skills.mjs'), '--help']);
+  const child = f.run(process.execPath, [join(packageRoot, 'bin/superkit.mjs'), '--help']);
   assert.equal(child.status, 0, child.stderr);
   assert.match(child.stdout, /Compatibility bridge to codex-flash-agents/);
   assert.equal(existsSync(f.argvPath), false);
