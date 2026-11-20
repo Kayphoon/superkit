@@ -1,6 +1,6 @@
 ---
 name: superwiki
-description: 项目知识库管理器：管理 .wiki/skills/ 下的 wiki-* 知识模块。当需要检索项目既有知识（模块约定、历史决策、踩过的坑），或创建/更新/合并项目知识时使用；以当前代码为唯一真相来源。
+description: 项目知识库（.wiki/skills/ 下的 wiki-* 模块）。用于两种情况：当前项目已有 .wiki/skills，且任务需要其中的模块约定、历史决策或踩过的坑；或用户要求初始化知识库、把经验记录/更新/合并进项目知识。
 ---
 
 # SuperWiki
