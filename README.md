@@ -76,6 +76,8 @@ superwiki-init --personal /path/to/project   # 知识写在 .wiki/skills/，只�
 
 写入前脚本会检查所有要用到的路径：入口被占用、团队与个人模式互转、旧的项目版 `superwiki/` 还在，都会以 `❌` 退出，一个文件也不写。
 
+如果本机之前装过旧版全局 `superwiki`，直接让 agent 按单体迁移手册 [MIGRATE.md](MIGRATE.md) 检查并升级或清理。
+
 ## Codex 原生 agents
 
 原生 Codex Flash agents（`flash_explorer` / `flash_librarian`）和它们的安装器是另一件事，在独立仓库 [Kayphoon/codex-flash-agents](https://github.com/Kayphoon/codex-flash-agents) 维护：
@@ -93,6 +95,7 @@ skills/<name>/        每个 skill 的自包含目录
 bin/                  安装器 CLI
 tests/                安装器测试
 install-codex.sh      Codex agents 迁移桥
+MIGRATE.md            旧版 superwiki 单体迁移手册（可直接交给 agent 执行）
 AGENTS.md             在本仓库工作时的约定
 ```
 
