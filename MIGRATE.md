@@ -4,7 +4,7 @@
 
 **背景**：新版 `superwiki` 已拆分为两部分——项目日常使用随仓库共享的 `superwiki-auto`，全局 `superwiki` 改为纯手动触发（`disable-model-invocation: true`）。如果本机仍残留旧版全局 `superwiki`（无 `VERSION`、会自动触发去读 `.wiki/skills`），它会与项目里的 `superwiki-auto` 同时触发并给出矛盾结果。
 
-**执行原则**：先只读扫描，列出清单并取得用户明确确认后，再执行清理或安装。未确认前不删除任何文件、不执行安装。
+**执行原则**：先只读扫描，列出清单并取得用户明确确认后，再清理旧版并安装新版。未确认前不删除任何文件、不执行安装。目标统一为**仅手动触发的新版 `superwiki`**，不再提供"只删不装"的分支。
 
 ---
 
@@ -113,7 +113,7 @@ if (!findings.length) {
 ### 判定说明
 
 - `new`：含 `VERSION` 且 frontmatter 含 `disable-model-invocation: true`（新版，仅手动触发，不会冲突）。
-- `old`：旧版 `superwiki`，需要升级或清理。
+- `old`：旧版 `superwiki`，需要清理并替换为手动触发的新版。
 - `broken-link`：失效软链接，需要清理。
 - `unknown`：无法识别的同名内容，不要擅自删除，单独列出交由用户决定。
 
@@ -121,31 +121,30 @@ if (!findings.length) {
 
 ---
 
-## 2. 汇报清单并请求确认
+## 2. 汇报清单并确认执行
 
-把扫描到的每一项整理成表格展示给用户（路径、范围、类型与链接目标、状态），再请用户二选一：
+把扫描到的每一项整理成表格展示给用户（路径、范围、类型与链接目标、状态），并说明默认处理方式：
 
-- **方案 A（推荐）：清理旧版并升级到全局新版 `superwiki`**
-  - 适合会在其他项目接入或升级知识库的同事。新版仅支持手动触发，不会干扰项目的 `superwiki-auto`。
-- **方案 B：仅清理旧版，不装全局版**
-  - 适合只在已接入 `superwiki-auto` 的项目里工作的同事；项目已自包含，无需全局安装。
+- 清理所有 `old` 与 `broken-link`；
+- 安装新版 `superwiki`（`disable-model-invocation: true`，仅手动触发），不会再和项目里的 `superwiki-auto` 争抢自动触发；
+- `unknown` 保持不动，单独列出，除非用户明确指定删除。
 
-若存在指向本地源码仓库的软链接（例如开发者的 `superkit` 目录），明确标注为开发链接，不删除其源目录。
+说明完请用户确认一次即可执行；用户已明确授权时直接继续。若存在指向本地源码仓库的软链接（例如开发者的 `superkit` 目录），明确标注为开发链接，不删除其源目录。
 
 ---
 
-## 3. 按确认方案执行
+## 3. 执行清理与安装
 
 ### 清理旧版与断链
 
-仅移除用户确认的 `old` 和 `broken-link` 条目：
+移除用户确认的 `old` 和 `broken-link` 条目：
 
 - **软链接**：只删除链接本身，绝不删除其目标目录。
-  - 选方案 A 时，若某运行时目录的软链接本身指向 `~/.agents/skills/superwiki`，保留该软链接，等升级完成后复核即可；选方案 B 时连同软链接一起删除。
+  - 若某运行时目录的软链接本身指向 `~/.agents/skills/superwiki`，保留该软链接，等新版安装完成后复核即可。
 - **实体目录**：只删除对应的 `superwiki` 目录本身（包括项目工作区内残留的未跟踪 `.agents/skills/superwiki` 等旧副本）。
 - **未知条目**：除非用户明确指定删除，否则保留不动。
 
-### 安装全局新版（仅方案 A）
+### 安装全局新版
 
 默认安装到 `~/.agents/skills`：
 
@@ -153,11 +152,14 @@ if (!findings.length) {
 npx --yes github:Kayphoon/superkit install superwiki --force
 ```
 
-如果用户使用的工具依赖专属目录（例如原旧版作为实体目录装在 `~/.claude/skills`、`~/.codex/skills`、`~/.config/opencode/skills` 或 `~/.cursor/skills`，且没有软链接指向 `~/.agents/skills`），按需追加 `--target`（可重复指定）：
+再按扫描结果补齐专属目录：旧版以实体目录形式装在 `~/.claude/skills`、`~/.codex/skills`、`~/.config/opencode/skills`、`~/.cursor/skills`，或这些目录没有指向 `~/.agents/skills` 的链接时，用对应的 `--target` 一起装，避免升级后仍留着旧副本：
 
 ```bash
-npx --yes github:Kayphoon/superkit install superwiki --force --target agents --target claude
+# 例：旧版同时装在 .claude 和 .cursor，且两者都没有指向 ~/.agents/skills 的链接
+npx --yes github:Kayphoon/superkit install superwiki --force --target agents --target claude --target cursor
 ```
+
+`--target` 与目录的对应关系：`agents` → `~/.agents/skills`，`codex` → `~/.codex/skills`，`claude` → `~/.claude/skills`，`opencode` → `~/.config/opencode/skills`，`cursor` → `~/.cursor/skills`。
 
 若 `npx` 因网络、代理或权限失败，保留已完成的旧版清理（不影响项目正常使用 `superwiki-auto`），将完整报错和上述重试命令交给用户稍后执行。
 
@@ -168,7 +170,7 @@ npx --yes github:Kayphoon/superkit install superwiki --force --target agents --t
 重新运行第 1 节的只读扫描脚本，确认：
 
 1. 不再有任何 `old` 或 `broken-link` 条目；
-2. 选方案 A 时，已安装条目状态为 `new`，并报告其 `version`（应与本次安装来源的 `skills/superwiki/VERSION` 一致）；
+2. 已安装条目状态为 `new`，并报告其 `version`（应与本次安装来源的 `skills/superwiki/VERSION` 一致）；
 3. 若当前位于已接入 `superwiki-auto` 的项目，确认 `superwiki-auto` 保持正常。
 
 最后提醒用户：**重新开启一次新会话**，让运行时重新发现最新的 skill 列表。

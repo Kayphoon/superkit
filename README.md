@@ -76,7 +76,7 @@ superwiki-init --personal /path/to/project   # 知识写在 .wiki/skills/，只�
 
 写入前脚本会检查所有要用到的路径：入口被占用、团队与个人模式互转、旧的项目版 `superwiki/` 还在，都会以 `❌` 退出，一个文件也不写。
 
-如果本机之前装过旧版全局 `superwiki`，直接让 agent 按单体迁移手册 [MIGRATE.md](MIGRATE.md) 检查并升级或清理。
+如果本机之前装过旧版全局 `superwiki`，直接让 agent 按单体迁移手册 [MIGRATE.md](MIGRATE.md) 检查并升级到手动触发的新版。
 
 ## Codex 原生 agents
 
