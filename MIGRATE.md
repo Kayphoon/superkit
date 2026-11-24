@@ -168,7 +168,7 @@ npx --yes github:Kayphoon/superkit install superwiki --force --target agents --t
 重新运行第 1 节的只读扫描脚本，确认：
 
 1. 不再有任何 `old` 或 `broken-link` 条目；
-2. 选方案 A 时，已安装条目状态为 `new`，并报告其 `version`（当前预期 `2026.11.20`）；
+2. 选方案 A 时，已安装条目状态为 `new`，并报告其 `version`（应与本次安装来源的 `skills/superwiki/VERSION` 一致）；
 3. 若当前位于已接入 `superwiki-auto` 的项目，确认 `superwiki-auto` 保持正常。
 
 最后提醒用户：**重新开启一次新会话**，让运行时重新发现最新的 skill 列表。

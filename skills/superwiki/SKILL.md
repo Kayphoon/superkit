@@ -42,6 +42,8 @@ disable-model-invocation: true
 
 先读项目知识目录里（团队模式 `.agents/skills/`，个人模式 `.wiki/skills/`）`superwiki-auto/SKILL.md` frontmatter 的 `metadata.superwiki-template`，和本 skill 的 `VERSION` 比较。相同就告诉用户已是最新；不同就用同一模式重新运行 `superwiki-init`：模板生成的文件按模板重写，模板已删除的文件一并移除，`references/local.md` 和全部 `wiki-*` 保留。团队模式升级后，用 `git diff` 把变化给用户审阅。
 
+脚本保留的旧 `wiki-*` 可能仍在标题下要求每次使用前查代码。提醒维护者：要让直接读取这些模块的运行时也使用新规则，只需把这句通用提示换成项目 `superwiki-auto/references/writing.md` 示例中的约束块。
+
 旧版迁移：
 
 - **团队模式旧版**（项目里有自己的 `superwiki/`）：逐段对比它和 `templates/superwiki-auto/`。只适用于本项目的规则整理进 `local.md` 的草稿；通用的改进单独列给用户，建议合并回本仓库模板。用户确认后删除旧的 `superwiki/` 目录，再运行 `superwiki-init --team`，最后把 `local.md` 草稿写进去。旧目录与全局 `superwiki` 同名，会和本 skill 抢同一个名字，所以脚本在它还在时会拒绝运行。

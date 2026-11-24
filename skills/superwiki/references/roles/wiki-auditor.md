@@ -131,16 +131,12 @@ standalone audit subset, not a parallel write protocol.
    - Source paths, examples, and codes belong in the body, not in
      `description`; the description carries purpose, trigger information
      front-loaded, and necessary boundaries.
-   - The body must carry the ground-truth verification block immediately below
-     the main H1 title, before any other section: a quote block stating that
-     code is the sole source of truth and that the current implementation must
-     be checked before use (`> 约束：代码是唯一真相来源。使用本文内容前需核对当前实现，冲突时以代码为准。`
-     or an equivalent quote block with the same meaning). Flag its absence on
-     a new module or a touched legacy module as a required fix. The reason is
-     that host runtimes (Cursor, Claude Code, OpenCode, Codex/agent-compatible)
-     discover `wiki-*` through native skill discovery and read the topic
-     `SKILL.md` directly without loading `superwiki-auto`, so this line is
-     the only guard against treating stale documentation as ground truth.
+   - Immediately below the main H1, require a quote block with the module's
+     trust rule: verify claims when writing, trust formal entries within their
+     scope when reading, and recheck only the disputed claim when a contradiction
+     arises. For current behavior, the applicable implementation is authoritative.
+     Flag a missing or conflicting block on new or edited modules: a runtime
+     can read a topic `SKILL.md` directly without loading `superwiki-auto`.
    A body-only edit keeps its existing index values but still gets these
    format checks; it does not trigger a global budget recomputation. Do not
    invent a length target beyond these standard limits. If the existing
