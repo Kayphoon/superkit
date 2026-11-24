@@ -65,7 +65,7 @@ npx @kayphoon/superkit remove explorer
 
 ## 使用 superwiki
 
-全局的 `superwiki` 只能手动调用。在项目里调用一次，它会问你选哪种模式，然后生成项目级的 `superwiki-auto`：
+全局的 `superwiki` 只能手动调用。**没有接入过的仓库不会被自动接管**：要让某个项目开始用知识库，在那个仓库目录里主动调用一次 `superwiki`（`/superwiki`、`@superwiki`、`$superwiki`），它会问你选哪种模式，然后生成项目级的 `superwiki-auto`：
 
 ```bash
 superwiki-init --team /path/to/project       # 知识写在 .agents/skills/，提交进 Git 与团队共享
